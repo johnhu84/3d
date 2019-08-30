@@ -1,0 +1,338 @@
+<html>
+	<head>
+		<title>My first three.js app</title>
+		<link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+		<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+		<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+		<table>
+			<tr>
+				<td colspan=5>
+					<button id="btn9">扩大</button>
+				</td>
+			</tr>
+		</table>
+		<canvas id="cc" style="z-index: 1;	position:absolute; left:0px;"></canvas>
+		<script src="js/Loader.js"></script>
+		<script type="module">
+			import * as THREE from '../build/three.module.js';
+			import Stats from './jsm/libs/stats.module.js';
+
+			import { OrbitControls } from './jsm/controls/OrbitControls.js';
+			import { TransformControls } from './jsm/controls/TransformControls.js';
+			import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+			import { DRACOLoader } from './jsm/loaders/DRACOLoader.js';
+			import { STLLoader } from './jsm/loaders/STLLoader.js';
+			//import { VRMLLoader } from './jsm/loaders/VRMLLoader.js';
+			var scene = new THREE.Scene();
+						scene.background = new THREE.Color( 0xffffff );
+			var camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 100 );
+			camera.position.set( 5, 2, 8 );
+
+			//var container = document.getElementById( 'container' );
+
+			var stats = new Stats();
+			var clock = new THREE.Clock();
+			//container.appendChild( stats.dom );
+			var canvas = document.getElementById('cc');
+			var renderer = new THREE.WebGLRenderer( { antialias: true, canvas: canvas } );
+			renderer.setPixelRatio( window.devicePixelRatio );
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.gammaOutput = true;
+			renderer.gammaFactor = 2.2;
+			//container.appendChild( renderer.domElement );
+			var controls = new OrbitControls( camera, renderer.domElement );
+			controls.target.set( 0, 0.5, 0 );
+			controls.enablePan = false;
+
+			scene.add( new THREE.AmbientLight( 0x404040 ) );
+
+			var pointLight = new THREE.PointLight( 0xffffff, 1 );
+			pointLight.position.copy( camera.position );
+			scene.add( pointLight );
+
+			var transformControls = new TransformControls(camera, renderer.domElement);
+			transformControls.addEventListener('change', render);
+			transformControls.addEventListener('dragging-changed', function(e) {
+				controls.enabled = !e.value;
+			});
+			var cuttingBox = new THREE.Plane( new THREE.Vector3( 0, - 1, 0 ), 0.8 );
+			renderer.clippingPlanes = [];//[localPlane];
+			renderer.localClippingEnabled = false;
+
+			/*var gridHelper = new THREE.GridHelper( 10, 10 );
+			scene.add( gridHelper );
+			var axesHelper = new THREE.AxisHelper(2)
+			axesHelper.position.set(5, 0, 5)
+			scene.add(axesHelper)*/
+
+			var mixer;
+			var model;
+			var carModel = [];
+			var carModelMode = 1; //1 - shrunk, 2 - expand, 3 - shrink, 4 - expanded
+			var carModelOrigPos = [];
+			var carModelDestPos = [
+				new THREE.Vector3(.4, .8, 1),
+				new THREE.Vector3(-1, 1, 0),
+				new THREE.Vector3(1, 1, 0),
+				new THREE.Vector3(.4, .8, 0),
+				new THREE.Vector3(-1, .8, 0),
+				new THREE.Vector3(.4, .8, -1),
+				new THREE.Vector3(-.4, .8, -1),
+				new THREE.Vector3(-.5, .8, -1),
+				new THREE.Vector3(-.4, .8, 1),
+				new THREE.Vector3(-.5, .8, 1)
+			];
+
+			var animate = function () {
+				requestAnimationFrame( animate );
+				if (carModelMode === 2) { //expanding
+					var l = carModel.length;
+					var counter = 0;
+					for (var i = 0; i < l; i++) {
+						var dp = carModelDestPos[i];
+						var op = carModelOrigPos[i];
+						var cm = carModel[i];
+						var diffX = (dp.x - op.x)/70;
+						var diffY = (dp.y - op.y)/70;
+						var diffZ = (dp.z - op.z)/70;
+						if (cm.position.x === dp.x && cm.position.y === dp.y && cm.position.z === dp.z) {
+							counter++;
+						} else if (Math.abs(cm.position.x - dp.x) < .004
+							&& Math.abs(cm.position.y - dp.y) < .004
+							&& Math.abs(cm.position.z - dp.z) < .004
+						) {
+							cm.position.copy(dp);
+							counter++;
+						} else {
+							cm.position.set(cm.position.x + diffX, cm.position.y + diffY, cm.position.z + diffZ);
+							//cm.position.translateX(diffX);
+							//cm.position.translateY(diffY);
+							//cm.position.translateZ(diffZ);
+						}
+					}
+					if (counter === l) {
+						carModelMode = 4;
+						document.getElementById('btn9').innerHTML = '扩小';
+					}
+				} else if (carModelMode === 3) { //shrinking
+					var l = carModel.length;
+					var counter = 0;
+					for (var i = 0; i < l; i++) {
+						var dp = carModelDestPos[i];
+						var op = carModelOrigPos[i];
+						var cm = carModel[i];
+						var diffX = (op.x - dp.x)/70;
+						var diffY = (op.y - dp.y)/70;
+						var diffZ = (op.z - dp.z)/70;
+						if (cm.position.x === op.x && cm.position.y === op.y && cm.position.z === op.z) {
+							counter++;
+						} else if (Math.abs(cm.position.x - op.x) < .004
+							&& Math.abs(cm.position.y - op.y) < .004
+							&& Math.abs(cm.position.z - op.z) < .004
+						) {
+							cm.position.copy(op);
+							counter++;
+						} else {
+							cm.position.set(cm.position.x + diffX, cm.position.y + diffY, cm.position.z + diffZ);
+							//cm.position.translateY(diffY);
+							//cm.position.translateZ(diffZ);
+						}
+					}
+					if (counter === l) {
+						carModelMode = 1;
+						document.getElementById('btn9').innerHTML = '扩大';
+					}
+				}
+				renderer.render( scene, camera );
+			};
+
+			function render() {
+				renderer.render(scene, camera);
+			}
+
+			animate();
+
+			var rgbToHex = function (rgb) {
+			  var hex = Number(rgb).toString(16);
+			  if (hex.length < 2) {
+			       hex = "0" + hex;
+			  }
+			  return hex;
+			};
+
+			var fullColorHex = function(r,g,b) {
+  			var red = rgbToHex(r);
+  			var green = rgbToHex(g);
+  			var blue = rgbToHex(b);
+  			return '0x'+red+green+blue;
+			};
+
+			/*var btn5 = document.getElementById('btn5');
+			btn5.addEventListener('click', cb2change);
+			function cb2change(e) {
+				var color = fullColorHex(document.getElementById('r').value, document.getElementById('g').value, document.getElementById('b').value);
+				model.traverse(function(child) {
+					if (child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh) {
+						if (child.material.ambient)
+							child.material.ambient.setHex(color);
+						if (child.material.color)
+							child.material.color.setHex(color);
+					}
+				});
+			}
+
+			var r = document.getElementById('r');
+			r.addEventListener('change', cchange);
+			var g = document.getElementById('g');
+			g.addEventListener('change', cchange);
+			var b = document.getElementById('b');
+			b.addEventListener('change', cchange);
+
+			function cchange(e) {
+				var color = fullColorHex(document.getElementById('r').value, document.getElementById('g').value, document.getElementById('b').value);
+				model.traverse(function(child) {
+					if (child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh) {
+						if (child.material.ambient)
+							child.material.ambient.setHex(color);
+						if (child.material.color)
+							child.material.color.setHex(color);
+					}
+				});
+			}*/
+
+			//var btn8 = document.getElementById('btn8');
+			//btn8.addEventListener('click', function(e) {
+				/*var loader = new STLLoader();
+				loader.load( 'models/RAV4 -zuohoumen.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color:0x0006B5}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[0] = mesh;
+					carModelOrigPos[0] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-fadongjizhao.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color: 0x03FCEC}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[1] = mesh;
+					carModelOrigPos[1] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-houbeimen.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color:0xB41BBF}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[2] = mesh;
+					carModelOrigPos[2] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-houfangzhaungliang.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color:0xBF571B}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[3] = mesh;
+					carModelOrigPos[3] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-qianfangzhuangliang.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial())
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[4] = mesh;
+					carModelOrigPos[4] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-youhoumen.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color: 0xEB4034}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[5] = mesh;
+					carModelOrigPos[5] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-youqianmen.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color: 0xBF635E}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[6] = mesh;
+					carModelOrigPos[6] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-youyiziban.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial())
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[7] = mesh;
+					carModelOrigPos[7] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-zuoqianmen.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color: 0x00B50F}))
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[8] = mesh;
+					carModelOrigPos[8] = mesh.position.clone();
+					scene.add( mesh );
+				} );
+				loader.load( 'models/RAV4-zuoyiziban.stl', function ( geometry ) {
+					var mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial())
+					mesh.rotation.x = -Math.PI / 2;
+					mesh.position.setY(.8);
+					carModel[9] = mesh;
+					carModelOrigPos[9] = mesh.position.clone();
+					scene.add( mesh );
+				} );*/
+				/*loader.load( 'models/RAV4 -zuohoumen.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-fadongjizhao.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-houbeimen.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-houfangzhaungliang.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-qianfangzhuangliang.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-youhoumen.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-youqianmen.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-youyiziban.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-zuoqianmen.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );
+				loader.load( 'models/RAV4-zuoyiziban.wrl', function ( geometry ) {
+					scene.add( geometry );
+				} );*/
+			//});
+
+			var btn9 = document.getElementById('btn9');
+			btn9.addEventListener('click', function(e) {
+				if (carModelMode === 1) {
+					carModelMode = 2;
+				} else if (carModelMode === 4) {
+					carModelMode = 3;
+				}
+			});
+
+			$( function() {
+
+			} );
+		</script>
+	</body>
+</html>
